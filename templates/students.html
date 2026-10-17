@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Registration</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+    <h1>👩‍🎓 Student Registration</h1>
+</header>
+
+<nav>
+    <a href="/">Dashboard</a>
+    <a href="/books">Books</a>
+    <a href="/students">Students</a>
+    <a href="/issue">Issue Book</a>
+    <a href="/records">Records</a>
+</nav>
+
+<main>
+    <h2>Register Student</h2>
+
+    {% for message in get_flashed_messages() %}
+        <p class="message">{{ message }}</p>
+    {% endfor %}
+
+    <form method="POST" class="book-form">
+        <label for="name">Student Name</label>
+        <input id="name" type="text" name="name" required>
+
+        <label for="email">Email Address</label>
+        <input id="email" type="email" name="email" required>
+
+        <button type="submit">Register Student</button>
+    </form>
+
+    <h2>Registered Students</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr>
+                <td>{{ student['id'] }}</td>
+                <td>{{ student['name'] }}</td>
+                <td>{{ student['email'] }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3">No students registered yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</main>
+
+</body>
+</html>

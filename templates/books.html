@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Books</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+    <h1>📚 Library Books</h1>
+    <p>Search and manage your collection</p>
+</header>
+
+<nav>
+    <a href="/">Dashboard</a>
+    <a href="/books">Books</a>
+    <a href="/add">Add Book</a>
+    <a href="/students">Students</a>
+    <a href="/issue">Issue Book</a>
+    <a href="/records">Records</a>
+</nav>
+
+<main>
+    <h2>Book Collection</h2>
+
+    {% for message in get_flashed_messages() %}
+        <p class="message">{{ message }}</p>
+    {% endfor %}
+
+    <form method="GET" action="/books" class="search-form">
+        <input type="text" name="search"
+               placeholder="Search title, author, or category"
+               value="{{ search }}">
+        <button type="submit">Search</button>
+    </form>
+
+    {% if books %}
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Category</th>
+                <th>Total Copies</th>
+                <th>Available</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for book in books %}
+            <tr>
+                <td>{{ book['id'] }}</td>
+                <td>{{ book['title'] }}</td>
+                <td>{{ book['author'] }}</td>
+                <td>{{ book['category'] }}</td>
+                <td>{{ book['quantity'] }}</td>
+                <td>{{ book['available'] }}</td>
+                <td>
+                    <form method="POST"
+                          action="{{ url_for('delete_book', book_id=book['id']) }}"
+                          onsubmit="return confirm('Delete this book?');">
+                        <button class="delete-button" type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p>No books found. Add a book to get started!</p>
+    {% endif %}
+
+    <a href="/add" class="button">Add New Book</a>
+</main>
+
+</body>
+</html>

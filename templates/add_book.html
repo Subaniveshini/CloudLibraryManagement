@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Add Book</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <header>
+        <h1>➕ Add a New Book</h1>
+        <p>Enter the book details below</p>
+    </header>
+
+    <nav>
+        <a href="/">Dashboard</a>
+        <a href="/books">View Books</a>
+        <a href="/add">Add Book</a>
+    </nav>
+
+    <main>
+
+        <h2>Book Details</h2>
+
+        <form method="POST" action="/add" class="book-form">
+
+            <label for="title">Book Title</label>
+            <input
+                id="title"
+                type="text"
+                name="title"
+                required
+            >
+
+            <label for="author">Author</label>
+            <input
+                id="author"
+                type="text"
+                name="author"
+                required
+            >
+
+            <label for="category">Category</label>
+            <input
+                id="category"
+                type="text"
+                name="category"
+                required
+            >
+
+            <label for="quantity">Quantity</label>
+            <input
+                id="quantity"
+                type="number"
+                name="quantity"
+                min="1"
+                value="1"
+                required
+            >
+
+            <button type="submit">Save Book</button>
+
+        </form>
+
+    </main>
+
+</body>
+</html>

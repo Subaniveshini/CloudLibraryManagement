@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue Book</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+    <h1>📤 Issue a Book</h1>
+</header>
+
+<nav>
+    <a href="/">Dashboard</a>
+    <a href="/books">Books</a>
+    <a href="/students">Students</a>
+    <a href="/issue">Issue Book</a>
+    <a href="/records">Records</a>
+</nav>
+
+<main>
+    <h2>Borrowing Details</h2>
+
+    {% for message in get_flashed_messages() %}
+        <p class="message">{{ message }}</p>
+    {% endfor %}
+
+    {% if books and students %}
+
+    <form method="POST" class="book-form">
+
+        <label for="book_id">Select Book</label>
+        <select id="book_id" name="book_id" required>
+            {% for book in books %}
+            <option value="{{ book['id'] }}">
+                {{ book['title'] }} (Total copies: {{ book['quantity'] }})
+            </option>
+            {% endfor %}
+        </select>
+
+        <label for="student_id">Select Student</label>
+        <select id="student_id" name="student_id" required>
+            {% for student in students %}
+            <option value="{{ student['id'] }}">
+                {{ student['name'] }} — {{ student['email'] }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <button type="submit">Issue Book</button>
+
+    </form>
+
+    {% else %}
+        <p>Please add at least one book and register at least one student before issuing books.</p>
+    {% endif %}
+</main>
+
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Library Management System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+    <h1>📚 Cloud Library Management System</h1>
+    <p>Your digital library, all in one place</p>
+</header>
+
+<nav>
+    <a href="/">Dashboard</a>
+    <a href="/books">Books</a>
+    <a href="/add">Add Book</a>
+    <a href="/students">Students</a>
+    <a href="/issue">Issue Book</a>
+    <a href="/records">Records</a>
+</nav>
+
+<main>
+    <h2>Library Dashboard</h2>
+    <p>Welcome! Manage books, students, and borrowing records.</p>
+
+    {% for message in get_flashed_messages() %}
+        <p class="message">{{ message }}</p>
+    {% endfor %}
+
+    <div class="dashboard">
+
+        <div class="card">
+            <h3>Book Titles</h3>
+            <p>{{ total_titles }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Available Copies</h3>
+            <p>{{ total_copies - issued_books }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Books Issued</h3>
+            <p>{{ issued_books }}</p>
+        </div>
+
+        <div class="card">
+            <h3>Registered Students</h3>
+            <p>{{ student_count }}</p>
+        </div>
+
+    </div>
+
+    <div class="actions">
+        <a href="/books" class="button">View Books</a>
+        <a href="/add" class="button">Add New Book</a>
+        <a href="/students" class="button">Register Student</a>
+        <a href="/issue" class="button">Issue a Book</a>
+        <a href="/records" class="button">Borrowing Records</a>
+    </div>
+</main>
+
+<footer>
+    <p>Cloud-Based Library Management System | Mini Project</p>
+</footer>
+
+</body>
+</html>

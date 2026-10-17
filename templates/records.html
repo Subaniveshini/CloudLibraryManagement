@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Borrowing Records</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header>
+    <h1>📋 Borrowing Records</h1>
+</header>
+
+<nav>
+    <a href="/">Dashboard</a>
+    <a href="/books">Books</a>
+    <a href="/students">Students</a>
+    <a href="/issue">Issue Book</a>
+    <a href="/records">Records</a>
+</nav>
+
+<main>
+    <h2>Issued and Returned Books</h2>
+
+    {% for message in get_flashed_messages() %}
+        <p class="message">{{ message }}</p>
+    {% endfor %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Record ID</th>
+                <th>Book</th>
+                <th>Student</th>
+                <th>Issue Date</th>
+                <th>Return Date</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for record in records %}
+            <tr>
+                <td>{{ record['id'] }}</td>
+                <td>{{ record['title'] }}</td>
+                <td>{{ record['name'] }}</td>
+                <td>{{ record['issue_date'] }}</td>
+                <td>{{ record['return_date'] or '-' }}</td>
+                <td>{{ record['status'] }}</td>
+                <td>
+                    {% if record['status'] == 'Issued' %}
+                    <form method="POST"
+                          onsubmit="return confirm('Confirm book return?');">
+                        <input type="hidden" name="issue_id"
+                               value="{{ record['id'] }}">
+                        <button type="submit">Return Book</button>
+                    </form>
+                    {% else %}
+                    Returned
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">No borrowing records found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</main>
+
+</body>
+</html>
