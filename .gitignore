@@ -5,3 +5,4 @@ venv/
 .env
 library.db
 instance/
+app_backup.py

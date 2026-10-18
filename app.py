@@ -1,82 +1,50 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash
-import sqlite3
+from dotenv import load_dotenv
+import psycopg
+from psycopg.rows import dict_row
+
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = "library-project-secret-key"
+app.secret_key = os.environ.get("SECRET_KEY", "temporary-local-development-key")
 
-DATABASE = "library.db"
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
-# Connect to the database
+# Connect to Supabase PostgreSQL
 def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-# Create the database tables
-def initialize_database():
-    conn = get_db_connection()
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS books (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            author TEXT NOT NULL,
-            category TEXT NOT NULL,
-            quantity INTEGER NOT NULL CHECK(quantity >= 0)
+    if not DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is missing. Please check your .env file."
         )
-    """)
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE
-        )
-    """)
-
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS issues (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            book_id INTEGER NOT NULL,
-            student_id INTEGER NOT NULL,
-            issue_date TEXT NOT NULL DEFAULT CURRENT_DATE,
-            return_date TEXT,
-            status TEXT NOT NULL DEFAULT 'Issued'
-                CHECK(status IN ('Issued', 'Returned')),
-            FOREIGN KEY(book_id) REFERENCES books(id),
-            FOREIGN KEY(student_id) REFERENCES students(id)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
+    return psycopg.connect(
+        DATABASE_URL,
+        row_factory=dict_row,
+        connect_timeout=10
+    )
 
 
 # Dashboard
 @app.route("/")
 def home():
-    conn = get_db_connection()
+    with get_db_connection() as conn:
+        total_titles = conn.execute(
+            "SELECT COUNT(*) AS count FROM books"
+        ).fetchone()["count"]
 
-    total_titles = conn.execute(
-        "SELECT COUNT(*) FROM books"
-    ).fetchone()[0]
+        total_copies = conn.execute(
+            "SELECT COALESCE(SUM(quantity), 0) AS total FROM books"
+        ).fetchone()["total"]
 
-    total_copies = conn.execute(
-        "SELECT COALESCE(SUM(quantity), 0) FROM books"
-    ).fetchone()[0]
+        issued_books = conn.execute(
+            "SELECT COUNT(*) AS count FROM issues WHERE status = 'Issued'"
+        ).fetchone()["count"]
 
-    issued_books = conn.execute(
-        "SELECT COUNT(*) FROM issues WHERE status = 'Issued'"
-    ).fetchone()[0]
-
-    student_count = conn.execute(
-        "SELECT COUNT(*) FROM students"
-    ).fetchone()[0]
-
-    conn.close()
+        student_count = conn.execute(
+            "SELECT COUNT(*) AS count FROM students"
+        ).fetchone()["count"]
 
     return render_template(
         "index.html",
@@ -92,24 +60,25 @@ def home():
 def books():
     search = request.args.get("search", "").strip()
 
-    conn = get_db_connection()
-
-    book_list = conn.execute("""
-        SELECT
-            b.*,
-            b.quantity - (
-                SELECT COUNT(*)
-                FROM issues i
-                WHERE i.book_id = b.id AND i.status = 'Issued'
-            ) AS available
-        FROM books b
-        WHERE b.title LIKE ?
-           OR b.author LIKE ?
-           OR b.category LIKE ?
-        ORDER BY b.id DESC
-    """, (f"%{search}%", f"%{search}%", f"%{search}%")).fetchall()
-
-    conn.close()
+    with get_db_connection() as conn:
+        book_list = conn.execute(
+            """
+            SELECT
+                b.*,
+                b.quantity - (
+                    SELECT COUNT(*)
+                    FROM issues i
+                    WHERE i.book_id = b.id
+                    AND i.status = 'Issued'
+                ) AS available
+            FROM books b
+            WHERE b.title ILIKE %s
+               OR b.author ILIKE %s
+               OR COALESCE(b.category, '') ILIKE %s
+            ORDER BY b.id DESC
+            """,
+            (f"%{search}%", f"%{search}%", f"%{search}%")
+        ).fetchall()
 
     return render_template(
         "books.html",
@@ -134,15 +103,14 @@ def add_book():
         if not title or not author or not category or quantity < 1:
             return "Please enter valid book details.", 400
 
-        conn = get_db_connection()
-
-        conn.execute("""
-            INSERT INTO books (title, author, category, quantity)
-            VALUES (?, ?, ?, ?)
-        """, (title, author, category, quantity))
-
-        conn.commit()
-        conn.close()
+        with get_db_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO books (title, author, category, quantity)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (title, author, category, quantity)
+            )
 
         flash("Book added successfully!")
         return redirect(url_for("books"))
@@ -153,35 +121,32 @@ def add_book():
 # Register a student
 @app.route("/students", methods=["GET", "POST"])
 def students():
-    conn = get_db_connection()
-
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
 
         if not name or not email or "@" not in email:
-            conn.close()
             flash("Please enter a valid name and email.")
             return redirect(url_for("students"))
 
         try:
-            conn.execute(
-                "INSERT INTO students (name, email) VALUES (?, ?)",
-                (name, email)
-            )
-            conn.commit()
+            with get_db_connection() as conn:
+                conn.execute(
+                    "INSERT INTO students (name, email) VALUES (%s, %s)",
+                    (name, email)
+                )
+
             flash("Student registered successfully!")
-        except sqlite3.IntegrityError:
+
+        except psycopg.errors.UniqueViolation:
             flash("This email is already registered.")
 
-        conn.close()
         return redirect(url_for("students"))
 
-    student_list = conn.execute(
-        "SELECT * FROM students ORDER BY name"
-    ).fetchall()
-
-    conn.close()
+    with get_db_connection() as conn:
+        student_list = conn.execute(
+            "SELECT * FROM students ORDER BY name"
+        ).fetchall()
 
     return render_template("students.html", students=student_list)
 
@@ -189,66 +154,60 @@ def students():
 # Issue a book
 @app.route("/issue", methods=["GET", "POST"])
 def issue_book():
-    conn = get_db_connection()
-
     if request.method == "POST":
         try:
             book_id = int(request.form.get("book_id", "0"))
             student_id = int(request.form.get("student_id", "0"))
         except ValueError:
-            conn.close()
             flash("Please select a valid book and student.")
             return redirect(url_for("issue_book"))
 
-        book = conn.execute(
-            "SELECT * FROM books WHERE id = ?", (book_id,)
-        ).fetchone()
+        with get_db_connection() as conn:
+            book = conn.execute(
+                "SELECT * FROM books WHERE id = %s",
+                (book_id,)
+            ).fetchone()
 
-        student = conn.execute(
-            "SELECT * FROM students WHERE id = ?", (student_id,)
-        ).fetchone()
+            student = conn.execute(
+                "SELECT * FROM students WHERE id = %s",
+                (student_id,)
+            ).fetchone()
 
-        if not book or not student:
-            conn.close()
-            flash("Selected book or student does not exist.")
-            return redirect(url_for("issue_book"))
+            if not book or not student:
+                flash("Selected book or student does not exist.")
+                return redirect(url_for("issue_book"))
 
-        issued_count = conn.execute(
-            """
-            SELECT COUNT(*) FROM issues
-            WHERE book_id = ? AND status = 'Issued'
-            """,
-            (book_id,)
-        ).fetchone()[0]
+            issued_count = conn.execute(
+                """
+                SELECT COUNT(*) AS count FROM issues
+                WHERE book_id = %s AND status = 'Issued'
+                """,
+                (book_id,)
+            ).fetchone()["count"]
 
-        if issued_count >= book["quantity"]:
-            conn.close()
-            flash("No copies of this book are currently available.")
-            return redirect(url_for("issue_book"))
+            if issued_count >= book["quantity"]:
+                flash("No copies of this book are currently available.")
+                return redirect(url_for("issue_book"))
 
-        conn.execute(
-            """
-            INSERT INTO issues (book_id, student_id)
-            VALUES (?, ?)
-            """,
-            (book_id, student_id)
-        )
-
-        conn.commit()
-        conn.close()
+            conn.execute(
+                """
+                INSERT INTO issues (book_id, student_id)
+                VALUES (%s, %s)
+                """,
+                (book_id, student_id)
+            )
 
         flash("Book issued successfully!")
         return redirect(url_for("records"))
 
-    book_list = conn.execute(
-        "SELECT * FROM books ORDER BY title"
-    ).fetchall()
+    with get_db_connection() as conn:
+        book_list = conn.execute(
+            "SELECT * FROM books ORDER BY title"
+        ).fetchall()
 
-    student_list = conn.execute(
-        "SELECT * FROM students ORDER BY name"
-    ).fetchall()
-
-    conn.close()
+        student_list = conn.execute(
+            "SELECT * FROM students ORDER BY name"
+        ).fetchall()
 
     return render_template(
         "issue.html",
@@ -260,50 +219,48 @@ def issue_book():
 # View borrowing records and return books
 @app.route("/records", methods=["GET", "POST"])
 def records():
-    conn = get_db_connection()
-
     if request.method == "POST":
         try:
             issue_id = int(request.form.get("issue_id", "0"))
         except ValueError:
-            conn.close()
             flash("Invalid borrowing record.")
             return redirect(url_for("records"))
 
-        cursor = conn.execute(
-            """
-            UPDATE issues
-            SET status = 'Returned', return_date = CURRENT_DATE
-            WHERE id = ? AND status = 'Issued'
-            """,
-            (issue_id,)
-        )
+        with get_db_connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE issues
+                SET status = 'Returned', return_date = CURRENT_DATE
+                WHERE id = %s AND status = 'Issued'
+                """,
+                (issue_id,)
+            )
 
-        conn.commit()
-        conn.close()
+            updated = cursor.rowcount
 
-        if cursor.rowcount:
+        if updated:
             flash("Book returned successfully!")
         else:
             flash("Record not found or book already returned.")
 
         return redirect(url_for("records"))
 
-    issue_list = conn.execute("""
-        SELECT
-            issues.id,
-            books.title,
-            students.name,
-            issues.issue_date,
-            issues.return_date,
-            issues.status
-        FROM issues
-        JOIN books ON issues.book_id = books.id
-        JOIN students ON issues.student_id = students.id
-        ORDER BY issues.id DESC
-    """).fetchall()
-
-    conn.close()
+    with get_db_connection() as conn:
+        issue_list = conn.execute(
+            """
+            SELECT
+                issues.id,
+                books.title,
+                students.name,
+                issues.issue_date,
+                issues.return_date,
+                issues.status
+            FROM issues
+            JOIN books ON issues.book_id = books.id
+            JOIN students ON issues.student_id = students.id
+            ORDER BY issues.id DESC
+            """
+        ).fetchall()
 
     return render_template("records.html", records=issue_list)
 
@@ -311,26 +268,24 @@ def records():
 # Delete a book if it has no borrowing history
 @app.route("/delete/<int:book_id>", methods=["POST"])
 def delete_book(book_id):
-    conn = get_db_connection()
+    with get_db_connection() as conn:
+        history = conn.execute(
+            "SELECT COUNT(*) AS count FROM issues WHERE book_id = %s",
+            (book_id,)
+        ).fetchone()["count"]
 
-    history = conn.execute(
-        "SELECT COUNT(*) FROM issues WHERE book_id = ?",
-        (book_id,)
-    ).fetchone()[0]
+        if history:
+            flash("This book has borrowing records and cannot be deleted.")
+            return redirect(url_for("books"))
 
-    if history:
-        conn.close()
-        flash("This book has borrowing records and cannot be deleted.")
-        return redirect(url_for("books"))
-
-    conn.execute("DELETE FROM books WHERE id = ?", (book_id,))
-    conn.commit()
-    conn.close()
+        conn.execute(
+            "DELETE FROM books WHERE id = %s",
+            (book_id,)
+        )
 
     flash("Book deleted successfully!")
     return redirect(url_for("books"))
 
 
 if __name__ == "__main__":
-    initialize_database()
     app.run(debug=True)
